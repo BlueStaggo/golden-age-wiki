@@ -39,7 +39,7 @@ public class GenLayerPreviewer {
 	// - FREQUENCY_GRAPH: Shows the frequency of different biomes
 
     private static final Random random = new Random();
-	private static final PrintMode format = PrintMode.FREQUENCY_GRAPH;
+	private static final PrintMode format = PrintMode.IMAGE;
 	private static final long seed = random.nextLong(); // Set seed here
 
 	// To use a Minecraft font, drop the font file into %JAVA_HOME%/jre/lib/fonts.
@@ -70,10 +70,8 @@ public class GenLayerPreviewer {
 	public static void main(String[] args) {
 		final int x = -432;
 		final int y = -432;
-//		final int width = 864;
-//		final int height = 864;
-		final int width = 10000;
-		final int height = 10000;
+		final int width = 864;
+		final int height = 864;
 		addGenLayers(GenLayer.func_48425_a(seed, WorldType.DEFAULT)[0]);
 
 		initWorldGenSeed();
