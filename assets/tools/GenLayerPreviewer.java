@@ -11,7 +11,6 @@ import java.awt.font.GlyphVector;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.*;
@@ -23,21 +22,25 @@ import java.util.stream.Stream;
 public class GenLayerPreviewer {
     // GenLayerPreviewer created by BlueStaggo 2023
 
-	// Note: For GenLayerPreviewer to work properly, add "public final long seed"
+	// For GenLayerPreviewer to work properly, add "public final long seed"
 	// to GenLayer's fields and "this.seed = var1" to GenLayer's constructor.
+
+	// All results are copied to the clipboard unless otherwise stated.
 
 	// Format options:
 	// - MARKDOWN: Markdown table in text
 	// - WIKI: Markdown table with images from golden-age-wiki
 	// - ARRAY: Java array
-	// - HEATMAP: Image for values between 0 and 65536 (copied to clipboard)
+	// - HEATMAP: Image for values between 0 and 65536
 	// - HEATMAP_ANNOTATED: Heatmap with numbers on the squares
-	// - IMAGE: Image using biome colors (copied to clipboard)
+	// - IMAGE: Image using biome colors
 	// - IMAGE_SEQUENCE: Sequence of images with information for each GenLayer
 	//                   saved as a GIF if FFmpeg is installed (images saved to .minecraft/genlayertester)
+	// - FREQUENCY_GRAPH: Shows the frequency of different biomes
+
     private static final Random random = new Random();
-	private static final PrintMode format = PrintMode.IMAGE_SEQUENCE;
-	private static final long seed = "Glacier".hashCode(); // Set seed here
+	private static final PrintMode format = PrintMode.FREQUENCY_GRAPH;
+	private static final long seed = random.nextLong(); // Set seed here
 
 	// To use a Minecraft font, drop the font file into %JAVA_HOME%/jre/lib/fonts.
 	// Otherwise, system fonts can be used instead.
@@ -67,8 +70,10 @@ public class GenLayerPreviewer {
 	public static void main(String[] args) {
 		final int x = -432;
 		final int y = -432;
-		final int width = 864;
-		final int height = 864;
+//		final int width = 864;
+//		final int height = 864;
+		final int width = 10000;
+		final int height = 10000;
 		addGenLayers(GenLayer.func_48425_a(seed, WorldType.DEFAULT)[0]);
 
 		initWorldGenSeed();
@@ -121,6 +126,10 @@ public class GenLayerPreviewer {
 		}
 
 		return randCol.get(i);
+	}
+
+	private static void copyImage(BufferedImage image) {
+		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new ImageTransferable(image), null);
 	}
 
 	private static void printMarkdown(int[] array, int width, int height) {
@@ -193,7 +202,7 @@ public class GenLayerPreviewer {
 			}
 		}
 
-		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new ImageTransferable(img), null);
+		copyImage(img);
 	}
 
 	private static void printAnnotatedHeatmap(int[] array, int width, int height) {
@@ -228,7 +237,7 @@ public class GenLayerPreviewer {
 		}
 
 		gfx.dispose();
-		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new ImageTransferable(img), null);
+		copyImage(img);
 	}
 
 	private static void printImage(int[] array, int width, int height) {
@@ -243,7 +252,7 @@ public class GenLayerPreviewer {
 			}
 		}
 
-		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new ImageTransferable(img), null);
+		copyImage(img);
 	}
 
 	private static void printImageSequence(List<GenLayer> genLayers, int x, int z, int width, int height) {
@@ -357,6 +366,74 @@ public class GenLayerPreviewer {
 		}
 	}
 
+	private static void printFrequencyGraph(int[] array, int width, int height) {
+		int barWidth = 50;
+		int barSpacing = 10;
+		int barHeight = 500;
+		int max = 0;
+
+		Map<Integer, Integer> biomeCounts = new TreeMap<>();
+
+		for (int i : array) {
+			int val = biomeCounts.compute(i, (k, v) -> v == null ? 1 : v + 1);
+			if (val > max) {
+				max = val;
+			}
+		}
+		float maxPercent = (float)max / (width * height);
+
+		BufferedImage img = new BufferedImage((barWidth + barSpacing) * biomeCounts.size() + barSpacing, barHeight + barSpacing * 2, BufferedImage.TYPE_INT_RGB);
+		Graphics2D gfx = img.createGraphics();
+
+		gfx.setBackground(Color.WHITE);
+		gfx.clearRect(0, 0, img.getWidth(), img.getHeight());
+		gfx.setFont(font);
+		gfx.setColor(Color.BLACK);
+		gfx.setStroke(new BasicStroke(1.0F));
+		gfx.drawLine(0, barSpacing - 1, img.getWidth(), barSpacing - 1);
+		gfx.drawLine(0, barHeight + barSpacing, img.getWidth(), barHeight + barSpacing);
+		gfx.setStroke(new BasicStroke(2.0F));
+		gfx.translate(barSpacing, barHeight + barSpacing);
+
+		for (Map.Entry<Integer, Integer> count : biomeCounts.entrySet()) {
+			int i = count.getKey();
+			int color = getBiomeColor(i);
+			String name = i < 0 || i > 255 || BiomeGenBase.biomeList[i] == null ? String.valueOf(i) : BiomeGenBase.biomeList[i].biomeName;
+			int thisBarHeight = (int)((float)count.getValue() / (width * height) / maxPercent * barHeight);
+			String percent = String.format("%.2f", (float)count.getValue() * 100.0F / (width * height)) + "%";
+			name += "  " + percent;
+
+			gfx.setStroke(new BasicStroke(1.0F));
+			gfx.setColor(new Color(0x3f000000, true));
+			gfx.drawRect(-1, -barHeight - 1, barWidth + 1, barHeight + 1);
+			gfx.setStroke(new BasicStroke(2.0F));
+			gfx.setColor(Color.BLACK);
+			gfx.drawRect(0, -thisBarHeight, barWidth, thisBarHeight);
+			gfx.setColor(new Color(color));
+			gfx.fillRect(0, -thisBarHeight, barWidth, thisBarHeight);
+
+			gfx.translate(11, -4);
+			gfx.rotate(-Math.PI / 2.0D);
+
+			GlyphVector glyphVector = gfx.getFont().createGlyphVector(gfx.getFontRenderContext(), name);
+			Shape textShape = glyphVector.getOutline();
+
+			gfx.setColor(Color.BLACK);
+			gfx.draw(textShape);
+			gfx.setColor(Color.WHITE);
+			gfx.fill(textShape);
+
+			gfx.rotate(Math.PI / 2.0D);
+			gfx.translate(-11, 4);
+
+			gfx.translate(barWidth + barSpacing, 0);
+		}
+
+		gfx.dispose();
+
+		copyImage(img);
+	}
+
 	private static int lerpi(int a, int b, float t) {
 		return (int)(a + (b - a) * t);
 	}
@@ -372,7 +449,8 @@ public class GenLayerPreviewer {
 		HEATMAP,
 		HEATMAP_ANNOTATED,
 		IMAGE,
-		IMAGE_SEQUENCE;
+		IMAGE_SEQUENCE,
+		FREQUENCY_GRAPH;
 
 		static {
 			MARKDOWN.setFunction(GenLayerPreviewer::printMarkdown);
@@ -382,6 +460,7 @@ public class GenLayerPreviewer {
 			HEATMAP_ANNOTATED.setFunction(GenLayerPreviewer::printAnnotatedHeatmap);
 			IMAGE.setFunction(GenLayerPreviewer::printImage);
 			IMAGE_SEQUENCE.setSequencedFunction(GenLayerPreviewer::printImageSequence);
+			FREQUENCY_GRAPH.setFunction(GenLayerPreviewer::printFrequencyGraph);
 		}
 
 		private GenLayerPrintFunction function;
